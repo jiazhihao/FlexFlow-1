@@ -39,6 +39,26 @@ class ONNXModel(object):
         self.symbol_table[node.output[0]] = output
         logging.debug("ffmodel.add({}, {})".format(node.input[0], node.input[1]))
 
+    def handleConcat(self, ffmodel, node):
+        inputs = [self.symbol_table[i] for i in node.input]
+        attribute = {x.name: x for x in node.attribute}
+        output = ffmodel.concat(tensors=inputs, axis=attribute['axis'].i)
+        self.symbol_table[node.output[0]] = output
+        logging.debug("ffmodel.concat([{}], {})".format(', '.join(node.input), attribute['axis'].i))
+
+    def handleSplit(self, ffmodel, node):
+        input = self.symbol_table[node.input[0]]
+        attribute = {x.name: x for x in node.attribute}
+        split = list(attribute['split'].ints)
+        if 'axis' in attribute:
+            axis = attribute['axis'].i
+        else:
+            axis = 0
+        outputs = ffmodel.split(input=input, sizes=split, axis=axis)
+        for i, output in enumerate(outputs):
+            self.symbol_table[node.output[i]] = output
+        logging.debug("ffmodel.split({}, {}, {})".format(node.input[0], split, axis))
+
     def handleAveragePool(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
         attribute = {x.name: x for x in node.attribute}

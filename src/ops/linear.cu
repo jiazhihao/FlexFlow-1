@@ -17,7 +17,7 @@
 #include "cuda_helper.h"
 
 Tensor FFModel::dense(const Tensor& input,
-                      int outDim, 
+                      int outDim,
                       ActiMode activation,
                       bool use_bias,
                       const Op* shared_op,
@@ -37,7 +37,7 @@ Tensor FFModel::dense(const Tensor& input,
   return li->outputs[0];
 }
 
-Linear* FFModel::dense(int inDim, int outDim, 
+Linear* FFModel::dense(int inDim, int outDim,
                        ActiMode activation,
                        bool use_bias,
                        Initializer* kernel_initializer,
@@ -64,7 +64,7 @@ Linear::Linear(FFModel& model,
                const Op* shared_op,
                Initializer* _kernel_initializer,
                Initializer* _bias_initializer)
-: Op(model, OP_LINEAR, shared_op, "Dense_"+std::to_string(out_dim), _input), 
+: Op(model, OP_LINEAR, shared_op, "Dense_"+std::to_string(out_dim), _input),
   in_channels(_input.adim[0]), out_channels(out_dim),
   activation(_activation), use_bias(_use_bias),
   kernel_initializer(_kernel_initializer),
@@ -94,7 +94,7 @@ Linear::Linear(FFModel& model,
                bool _use_bias,
                Initializer* _kernel_initializer,
                Initializer* _bias_initializer)
-: Op(model, OP_LINEAR, "Dense_"+std::to_string(out_dim), 1), 
+: Op(model, OP_LINEAR, "Dense_"+std::to_string(out_dim), 1),
   in_channels(in_dim), out_channels(out_dim),
   activation(_activation), use_bias(_use_bias),
   kernel_initializer(_kernel_initializer),
@@ -524,10 +524,10 @@ void Linear::forward_task_with_dim(const Task *task,
     cudaEventDestroy(t_start);
     cudaEventDestroy(t_end);
     printf("Linear forward time = %.2lfms\n", elapsed);
-    //print_tensor<2, float>(acc_input.ptr, acc_input.rect, "[Linear:forward:input]");
+    //print_tensor<NDIM, float>(acc_input.ptr, acc_input.rect, "[Linear:forward:input]");
     //print_tensor<2, float>(acc_kernel.ptr, acc_kernel.rect, "[Linear:forward:kernel]");
     //print_tensor<1, float>(acc_bias.ptr, acc_bias.rect, "[Linear:forward:bias]");
-    //print_tensor<2, float>(acc_output.ptr, acc_output.rect, "[Linear:forward:output]");
+    //print_tensor<NDIM, float>(acc_output.ptr, acc_output.rect, "[Linear:forward:output]");
   }
 }
 
@@ -830,7 +830,7 @@ void Linear::backward_with_dim(const FFModel& ff)
         RegionRequirement(input_lps[0], 0/*projection id*/,
                           READ_ONLY, EXCLUSIVE, inputs[0].region));
     launcher.add_field(0, FID_DATA);
-    // regions[1](I/O): replica_grad 
+    // regions[1](I/O): replica_grad
     if (replica.region_grad != LogicalRegion::NO_REGION) {
       launcher.add_region_requirement(
           RegionRequirement(replica.part_grad, 0/*projection id*/,
@@ -910,7 +910,7 @@ Parameter* Linear::get_parameter(int index)
 __host__
 void Linear::print_layer(const FFModel& ff)
 {
-  printf("linear layer\n");  
+  printf("linear layer\n");
   Context ctx = ff.config.lg_ctx;
   Runtime* runtime = ff.config.lg_hlr;
 
@@ -919,36 +919,36 @@ void Linear::print_layer(const FFModel& ff)
   InlineLauncher kernel_launcher(kernel_req);
   PhysicalRegion kernel_region = runtime->map_region(ctx, kernel_launcher);
   kernel_region.wait_until_valid();
-  
+
   RegionRequirement bias_req(weights[1].region, READ_WRITE, EXCLUSIVE, weights[1].region);
   bias_req.add_field(FID_DATA);
   InlineLauncher bias_launcher(bias_req);
   PhysicalRegion bias_region = runtime->map_region(ctx, bias_launcher);
   bias_region.wait_until_valid();
-  
+
   TensorAccessorW<float, 2> acc_kernel(kernel_region, kernel_req, FID_DATA, ctx, runtime, true);
   TensorAccessorW<float, 1> acc_bias(bias_region, bias_req, FID_DATA, ctx, runtime, true);
-  
+
   const float *kernel_ptr = acc_kernel.ptr;
   const float *bias_ptr = acc_bias.ptr;
-  
+
   size_t kernel_size = acc_kernel.rect.volume();
   int kernel_dim1 = acc_kernel.rect.hi[0] - acc_kernel.rect.lo[0] + 1;
   int kernel_dim2 = acc_kernel.rect.hi[1] - acc_kernel.rect.lo[1] + 1;
   size_t bias_size = acc_bias.rect.volume();
   printf("kernel, %p, %d, [%d, %d]\n", kernel_ptr, kernel_size, kernel_dim1, kernel_dim2);
   printf("bias, %p, %d\n", bias_ptr, bias_size);
-  
+
   for (int i = 0; i < bias_size; i++) {
     printf("%f ", bias_ptr[i]);
   }
   printf("\n");
-  
+
   for (int i = 0; i < kernel_size; i++) {
     printf("%f ", kernel_ptr[i]);
   }
   printf("\n");
-  
+
   runtime->unmap_region(ctx, kernel_region);
   runtime->unmap_region(ctx, bias_region);
 

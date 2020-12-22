@@ -174,6 +174,7 @@ void Softmax::forward_task(const Task *task,
   if (softmax->profiling) {
     cudaEventRecord(t_end);
     checkCUDA(cudaEventSynchronize(t_end));
+    //print_tensor<2, float>(acc_input.ptr, acc_input.rect, "[Softmax:forward:input]");
     //print_tensor<2, float>(acc_output.ptr, acc_output.rect, "[Softmax:forward:output]");
     float elapsed = 0;
     checkCUDA(cudaEventElapsedTime(&elapsed, t_start, t_end));
@@ -297,5 +298,4 @@ bool Softmax::measure_compute_time(Simulator* sim,
                                    float& backward_time)
 {
   //TODO: implement measure_forward
-  return false;
-}
+  return false

@@ -184,7 +184,7 @@ OpMeta* Pool2D::init_task(const Task *task,
     printf("Warning: changing pool_padding_h to satisfy output_h size\n");
   if (pad_w != pool->padding_w)
     printf("Warning: changing pool_padding_w to satisfy output_w size\n");
-  
+
   cudnnPoolingMode_t mode;
   if (pool->pool_type == POOL_MAX)
     mode = CUDNN_POOLING_MAX;
@@ -263,12 +263,19 @@ void Pool2D::forward_task(const Task *task,
   assert(regions.size() == 2);
   assert(task->regions.size() == 2);
   float alpha = 1.0f, beta = 0.0f;
+  const Pool2D* pool = (Pool2D*) task->args;
   const Pool2DMeta* m = *((Pool2DMeta**) task->local_args);
   TensorAccessorR<float, 4> acc_input(
       regions[0], task->regions[0], FID_DATA, ctx, runtime);
   TensorAccessorW<float, 4> acc_output(
       regions[1], task->regions[1], FID_DATA, ctx, runtime,
       false/*readOutput*/);
+  cudaEvent_t t_start, t_end;
+  if (pool->profiling) {
+    cudaEventCreate(&t_start);
+    cudaEventCreate(&t_end);
+    cudaEventRecord(t_start);
+  }
 #ifndef DISABLE_LEGION_CUDA_HIJACK
   cudaStream_t stream;
   checkCUDA(cudaStreamCreate(&stream));
@@ -277,6 +284,17 @@ void Pool2D::forward_task(const Task *task,
   checkCUDNN(cudnnPoolingForward(m->handle.dnn, m->poolDesc,
                                  &alpha, m->inputTensor, acc_input.ptr,
                                  &beta, m->outputTensor, acc_output.ptr));
+  if (pool->profiling) {
+    cudaEventRecord(t_end);
+    checkCUDA(cudaEventSynchronize(t_end));
+    //print_tensor<4, float>(acc_input.ptr, acc_input.rect, "[Pool2D:forward:input]");
+    //print_tensor<4, float>(acc_output.ptr, acc_output.rect, "[Pool2D:forward:output]");
+    float elapsed = 0;
+    checkCUDA(cudaEventElapsedTime(&elapsed, t_start, t_end));
+    cudaEventDestroy(t_start);
+    cudaEventDestroy(t_end);
+    printf("Pool2D forward time = %.2fms\n", elapsed);
+  }
 }
 
 void Pool2D::forward(const FFModel& ff)
@@ -509,5 +527,3 @@ bool Pool2D::measure_compute_time(Simulator* sim,
   backward_time = milliseconds / sim->repeat_times;
 
   return false;
-}
-

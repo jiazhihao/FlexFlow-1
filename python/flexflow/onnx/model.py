@@ -81,8 +81,9 @@ class ONNXModel(object):
         kernel = attribute["kernel_shape"].ints
         padding = attribute["pads"].ints
         stride = attribute["strides"].ints
+        group = attribute["group"].int
         out_channels = self.inputs[node.input[1]].type.tensor_type.shape.dim[0].dim_value
-        output = ffmodel.conv2d(input, out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], name=node.name)
+        output = ffmodel.conv2d(input, out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], ActiMode.AC_MODE_NONE, group, name=node.name)
         self.symbol_table[node.output[0]] = output
         logging.debug("ffmodel.conv2d({}, {}, {}, {}, {}, {}, {}, {}, name={})".format(node.input[0], out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], node.name))
 

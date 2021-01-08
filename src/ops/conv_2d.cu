@@ -21,6 +21,7 @@ Tensor FFModel::conv2d(const Tensor& input,
                        int kernelH, int kernelW,
                        int strideH, int strideW,
                        int paddingH, int paddingW,
+                       int groups,
                        ActiMode activation,
                        bool use_bias,
                        const Op* shared_op,
@@ -40,11 +41,11 @@ Tensor FFModel::conv2d(const Tensor& input,
   Conv2D *conv;
   if (name == NULL) {
     conv = new Conv2D(*this, input, outChannels, kernelH, kernelW,
-                      strideH, strideW, paddingH, paddingW, activation,
+                      strideH, strideW, paddingH, paddingW, groups, activation,
                       use_bias, shared_op, kernel_initializer, bias_initializer);
   } else {
     conv = new Conv2D(*this, input, outChannels, kernelH, kernelW,
-                      strideH, strideW, paddingH, paddingW, activation,
+                      strideH, strideW, paddingH, paddingW, groups, activation,
                       use_bias, shared_op, kernel_initializer, bias_initializer, std::string(name));
   }
   layers.push_back(conv);
@@ -56,6 +57,7 @@ Conv2D* FFModel::conv2d(int inChannels,
                         int kernelH, int kernelW,
                         int strideH, int strideW,
                         int paddingH, int paddingW,
+                        int groups,
                         ActiMode activation,
                         bool use_bias,
                         Initializer* kernel_initializer,
@@ -73,11 +75,11 @@ Conv2D* FFModel::conv2d(int inChannels,
   Conv2D *conv;
   if (name == NULL) {
     conv = new Conv2D(*this, inChannels, outChannels, kernelH, kernelW,
-                      strideH, strideW, paddingH, paddingW, activation,
+                      strideH, strideW, paddingH, paddingW, groups, activation,
                       use_bias, kernel_initializer, bias_initializer);
   } else {
     conv = new Conv2D(*this, inChannels, outChannels, kernelH, kernelW,
-                      strideH, strideW, paddingH, paddingW, activation,
+                      strideH, strideW, paddingH, paddingW, groups, activation,
                       use_bias, kernel_initializer, bias_initializer, std::string(name));
   }
   layers.push_back(conv);
@@ -94,6 +96,7 @@ Conv2D::Conv2D(FFModel& model,
                int _kernel_h, int _kernel_w,
                int _stride_h, int _stride_w,
                int _padding_h, int _padding_w,
+               int _groups,
                ActiMode _activation,
                bool _use_bias,
                const Op* shared_op,
@@ -105,7 +108,7 @@ Conv2D::Conv2D(FFModel& model,
   kernel_h(_kernel_h), kernel_w(_kernel_w),
   stride_h(_stride_h), stride_w(_stride_w),
   padding_h(_padding_h), padding_w(_padding_w),
-  activation(_activation), use_bias(_use_bias),
+  groups(_groups), activation(_activation), use_bias(_use_bias),
   kernel_initializer(_kernel_initializer),
   bias_initializer(_bias_initializer),
   profiling(model.config.profiling)
@@ -127,7 +130,9 @@ Conv2D::Conv2D(FFModel& model,
   weights[0].numDim = 4;
   weights[0].adim[0] = kernel_w;
   weights[0].adim[1] = kernel_h;
-  weights[0].adim[2] = in_channels;
+  // Require input channels is divisible by groups
+  assert(in_channels % groups == 0);
+  weights[0].adim[2] = in_channels / groups;
   weights[0].adim[3] = out_channels;
   numWeights = 1;
   if (use_bias) {
@@ -143,6 +148,7 @@ Conv2D::Conv2D(FFModel& model,
                int _kernel_h, int _kernel_w,
                int _stride_h, int _stride_w,
                int _padding_h, int _padding_w,
+               int _groups,
                ActiMode _activation,
                bool _use_bias,
                const Op* shared_op,
@@ -178,7 +184,7 @@ Conv2D::Conv2D(FFModel& model,
   kernel_h(_kernel_h), kernel_w(_kernel_w),
   stride_h(_stride_h), stride_w(_stride_w),
   padding_h(_padding_h), padding_w(_padding_w),
-  activation(_activation), use_bias(_use_bias),
+  groups(_groups), activation(_activation), use_bias(_use_bias),
   kernel_initializer(_kernel_initializer),
   bias_initializer(_bias_initializer),
   profiling(model.config.profiling)
@@ -224,7 +230,7 @@ void Conv2D::create_weights(FFModel& model)
 
   // Create kernel
   {
-    const int dims[4] = {out_channels, in_channels, kernel_h, kernel_w};
+    const int dims[4] = {out_channels, in_channels / groups, kernel_h, kernel_w};
     weights[0] = model.create_conv_weight<4>(this, dims, (IndexSpaceT<4>)task_is, DT_FLOAT, kernel_initializer);
   }
   // Create bias tensor
@@ -354,10 +360,13 @@ OpMeta* Conv2D::init_task(const Task *task,
       CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
       1, output_c, 1, 1));
 
-  printf("filterDim: kernel(%d %d) c_in(%d), c_out(%d)\n", conv->kernel_h, conv->kernel_w, input_c, output_c);
+  // Require that input_c is divisible by conv->groups
+  assert(input_c % conv->groups == 0);
+  printf("filterDim: kernel(%d %d) c_in(%d), c_out(%d)\n",
+      conv->kernel_h, conv->kernel_w, input_c / conv->groups, output_c);
   checkCUDNN(cudnnSetFilter4dDescriptor(m->filterDesc,
       CUDNN_DATA_FLOAT, CUDNN_TENSOR_NCHW,
-      output_c, input_c, conv->kernel_h, conv->kernel_w));
+      output_c, input_c / conv->groups, conv->kernel_h, conv->kernel_w));
 
   //printf("convDim: padding(%d %d) stride(%d %d)\n", conv->padding_h, conv->padding_w, conv->stride_h, conv->stride_w);
   int pad_h = ((output_h - 1) * conv->stride_h + conv->kernel_h - input_h + 1) / 2;
@@ -376,6 +385,9 @@ OpMeta* Conv2D::init_task(const Task *task,
                                              1/*upscale_y*/,
                                              CUDNN_CROSS_CORRELATION,
                                              CUDNN_DATA_FLOAT));
+  if (conv->groups != 1) {
+    checkCUDNN(cudnnSetConvolutionGroupCount(m->convDesc, conv->groups));
+  }
   // enable tensor core when possible
   checkCUDNN(cudnnSetConvolutionMathType(m->convDesc, CUDNN_TENSOR_OP_MATH));
   int n, c, h, w;
@@ -1031,11 +1043,16 @@ bool Conv2D::measure_compute_time(Simulator* sim,
       CUDNN_DATA_FLOAT, input_n, input_c, input_h, input_w));
   checkCUDNN(cudnnSetTensor4dDescriptor(m->biasTensor, CUDNN_TENSOR_NCHW,
       CUDNN_DATA_FLOAT, 1, output_c, 1, 1));
+  // require input_c is divisible by groups
+  assert(input_c % groups == 0);
   checkCUDNN(cudnnSetFilter4dDescriptor(m->filterDesc, CUDNN_DATA_FLOAT,
-      CUDNN_TENSOR_NCHW, output_c, input_c, kernel_h, kernel_w));
+      CUDNN_TENSOR_NCHW, output_c, input_c / groups, kernel_h, kernel_w));
   checkCUDNN(cudnnSetConvolution2dDescriptor(m->convDesc, pad_h, pad_w,
       stride_h, stride_w, 1/*dilationH*/, 1/*dilationW*/,
       CUDNN_CROSS_CORRELATION, CUDNN_DATA_FLOAT));
+  if (groups != 1) {
+    checkCUDNN(cudnnSetConvolutionGroupCount(m->convDesc, groups));
+  }
   checkCUDNN(cudnnSetConvolutionMathType(m->convDesc, CUDNN_TENSOR_OP_MATH));
   int n, c, h, w;
   checkCUDNN(cudnnGetConvolution2dForwardOutputDim(m->convDesc,
@@ -1054,7 +1071,7 @@ bool Conv2D::measure_compute_time(Simulator* sim,
   assert(input_ptr != NULL);
   float *output_ptr = (float*)sim->allocate(sub_output.get_volume(), DT_FLOAT);
   assert(output_ptr != NULL);
-  float* weight_ptr = (float*)sim->allocate((size_t)output_c * input_c * kernel_h * kernel_w, DT_FLOAT);
+  float* weight_ptr = (float*)sim->allocate((size_t)output_c * input_c * kernel_h * kernel_w / groups, DT_FLOAT);
   assert(weight_ptr != NULL);
   float* bias_ptr = (float*)sim->allocate(output_c, DT_FLOAT);
   assert(bias_ptr != NULL);
@@ -1102,8 +1119,12 @@ bool Conv2D::measure_compute_time(Simulator* sim,
     checkCUDNN(perfResults[0].status);
     backward_time += perfResults[0].time;
   }
-  printf("[Measure Conv2D] input(%d %d %d %d) output(%d %d %d %d) kernel(%d %d) stride(%d %d) padding(%d %d) forward_time(%.4lf) backward_time(%.4lf)\n",
-         input_n, input_c, input_h, input_w, output_n, output_c, output_h, output_w, kernel_h, kernel_w, stride_h, stride_w, padding_h, padding_w,
+  printf("[Measure Conv2D] input(%d %d %d %d) weight(%d %d %d %d) output(%d %d %d %d) stride(%d %d) padding(%d %d) forward_time(%.4lf) backward_time(%.4lf)\n",
+         input_n, input_c, input_h, input_w, 
+         output_c, input_c / groups, kernel_h, kernel_w, 
+         output_n, output_c, output_h, output_w, 
+         stride_h, stride_w, 
+         padding_h, padding_w,
          forward_time, backward_time);
   return true;
 }

@@ -23,11 +23,11 @@ def top_level_task():
 
   onnx_model = ONNXModel(f"{MODEL_DIRECTORY}/nasneta_{ffconfig.get_batch_size()}_optimized.onnx")
   t = onnx_model.apply(ffmodel, {"data": input})
-  t = ffmodel.relu(t)
-  t = ffmodel.pool2d(t, t.dims[2], t.dims[3], 1, 1, 0, 0, pool_type=PoolType.POOL_AVG)
-  t = ffmodel.flat(t)
-  t = ffmodel.dense(t, 1000)
-  t = ffmodel.softmax(t)
+  t = ffmodel.relu(t, name='HEYA1')
+  t = ffmodel.pool2d(t, t.dims[2], t.dims[3], 1, 1, 0, 0, pool_type=PoolType.POOL_AVG, name='HEYA2')
+  t = ffmodel.flat(t, name='HEYA3')
+  t = ffmodel.dense(t, 1000, name='HEYA4')
+  t = ffmodel.softmax(t, name='HEYA5')
 
   ffoptimizer = SGDOptimizer(ffmodel, 0.01)
   ffmodel.set_sgd_optimizer(ffoptimizer)

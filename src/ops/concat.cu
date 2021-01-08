@@ -16,18 +16,33 @@
 #include "model.h"
 #include "cuda_helper.h"
 
-Tensor FFModel::concat(int n, const Tensor* tensors,
-                       int axis)
+Tensor FFModel::concat(int n,
+                       const Tensor* tensors,
+                       int axis,
+                       const char *name)
 {
-  Concat *cat = new Concat(*this, n, tensors, axis);
+  Concat *cat;
+  if (name == NULL) {
+    cat = new Concat(*this, n, tensors, axis);
+  } else {
+    cat = new Concat(*this, n, tensors, axis, std::string(name));
+  }
   layers.push_back(cat);
   return cat->outputs[0];
 }
 
 Concat::Concat(FFModel& model,
-               int _n, const Tensor* _tensors,
+               int _n,
+               const Tensor* _tensors,
                int _axis)
-: Op(model, OP_CONCAT, "Concat_"+std::to_string(_axis), _n, _tensors), axis(_axis),
+: Concat(model, _n, _tensors, _axis, "Concat_"+std::to_string(_axis))
+{ }
+
+Concat::Concat(FFModel& model,
+               int _n, const Tensor* _tensors,
+               int _axis,
+               const std::string &name)
+: Op(model, OP_CONCAT, name, _n, _tensors), axis(_axis),
    profiling(model.config.profiling)
 {
   //TODO: swich to use the Legion dim ordering
@@ -126,7 +141,7 @@ void Concat::init(const FFModel& ff)
     TaskArgument(this, sizeof(Concat)), argmap,
     Predicate::TRUE_PRED, false/*must*/, 0/*mapper_id*/,
     FFConfig::get_hash_id(std::string(name)));
- 
+
   launcher.add_region_requirement(
     RegionRequirement(outputs[0].part, 0/*projection id*/,
       WRITE_ONLY, EXCLUSIVE, outputs[0].region));
@@ -208,6 +223,12 @@ void Concat::forward_task(const Task *task,
       fprintf(stderr, "Unsupported concat dimension number");
       assert(false);
   }
+  cudaEvent_t t_start, t_end;
+  if (cc->profiling) {
+    cudaEventCreate(&t_start);
+    cudaEventCreate(&t_end);
+    cudaEventRecord(t_start);
+  }
   for (int i = 0; i < cc->numInputs; i++) {
     copy_with_stride<<<GET_BLOCKS(input_blk_sizes[i]*num_blocks), CUDA_NUM_THREADS>>>(
         output, inputs[i], num_blocks, output_blk_size, input_blk_sizes[i]);
@@ -216,11 +237,18 @@ void Concat::forward_task(const Task *task,
     output += input_blk_sizes[i];
   }
   if (cc->profiling) {
+    cudaEventRecord(t_end);
     checkCUDA(cudaDeviceSynchronize());
+    checkCUDA(cudaEventSynchronize(t_end));
     //print_tensor<4, float>(output - output_blk_size, output_rect, "[Concat:forward:output]");
     //printf("output_blk_size=%zu\n", output_blk_size);
     //print_tensor<4, float>(inputs[0], input_rect[0], "[Concat:forward:input0]");
     //print_tensor<4, float>(inputs[1], input_rect[1], "[Concat:forward:input1]");
+    float elapsed = 0;
+    checkCUDA(cudaEventElapsedTime(&elapsed, t_start, t_end));
+    cudaEventDestroy(t_start);
+    cudaEventDestroy(t_end);
+    printf("%s [Concat] forward time (CF) = %.2fms\n", cc->name, elapsed);
   }
 #ifdef DEADCODE
   const AccessorWO<float, 3> acc_output(regions[0], FID_DATA);

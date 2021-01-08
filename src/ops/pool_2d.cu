@@ -20,12 +20,20 @@ Tensor FFModel::pool2d(const Tensor& input,
                        int kernelH, int kernelW,
                        int strideH, int strideW,
                        int paddingH, int paddingW,
-                       PoolType type, ActiMode activation)
+                       PoolType type, ActiMode activation,
+                       char const *name)
 {
   assert(input.numDim == 4); /*NCHW*/
-  Pool2D *pool = new Pool2D(*this, input,kernelH, kernelW,
-                            strideH, strideW, paddingH, paddingW,
-                            type, activation);
+  Pool2D *pool;
+  if (name == NULL) {
+    pool = new Pool2D(*this, input,kernelH, kernelW,
+                      strideH, strideW, paddingH, paddingW,
+                      type, activation);
+  } else {
+    pool = new Pool2D(*this, input, kernelH, kernelW,
+                      strideH, strideW, paddingH, paddingW,
+                      type, activation, std::string(name));
+  }
   layers.push_back(pool);
   return pool->outputs[0];
 }
@@ -33,11 +41,19 @@ Tensor FFModel::pool2d(const Tensor& input,
 Pool2D* FFModel::pool2d(int kernelH, int kernelW,
                         int strideH, int strideW,
                         int paddingH, int paddingW,
-                        PoolType type, ActiMode activation)
+                        PoolType type, ActiMode activation,
+                        char const *name)
 {
-  Pool2D *pool = new Pool2D(*this, kernelH, kernelW,
-                            strideH, strideW, paddingH, paddingW,
-                            type, activation);
+  Pool2D *pool;
+  if (name == NULL) {
+    pool = new Pool2D(*this, kernelH, kernelW,
+                      strideH, strideW, paddingH, paddingW,
+                      type, activation);
+  } else {
+    pool = new Pool2D(*this, kernelH, kernelW,
+                      strideH, strideW, paddingH, paddingW,
+                      type, activation, std::string(name));
+  }
   layers.push_back(pool);
   return pool;
 }
@@ -48,7 +64,24 @@ Pool2D::Pool2D(FFModel& model,
                int _stride_h, int _stride_w,
                int _padding_h, int _padding_w,
                PoolType _type, ActiMode _activation)
-: Op(model, OP_POOL2D, "Pool2D_"+std::to_string(_kernel_h)+std::to_string(_kernel_w), _input),
+: Pool2D(
+    model,
+    _input,
+    _kernel_h, _kernel_w,
+    _stride_h, _stride_w,
+    _padding_h, _padding_w,
+    _type, _activation,
+    "Pool2D_"+std::to_string(_kernel_h)+std::to_string(_kernel_w)
+) { }
+
+Pool2D::Pool2D(FFModel& model,
+               const Tensor& _input,
+               int _kernel_h, int _kernel_w,
+               int _stride_h, int _stride_w,
+               int _padding_h, int _padding_w,
+               PoolType _type, ActiMode _activation,
+               std::string const &name)
+: Op(model, OP_POOL2D, name, _input),
   kernel_h(_kernel_h), kernel_w(_kernel_w),
   stride_h(_stride_h), stride_w(_stride_w),
   padding_h(_padding_h), padding_w(_padding_w),
@@ -73,7 +106,22 @@ Pool2D::Pool2D(FFModel& model,
                int _stride_h, int _stride_w,
                int _padding_h, int _padding_w,
                PoolType _type, ActiMode _activation)
-: Op(model, OP_POOL2D, "Pool2D_"+std::to_string(_kernel_h)+std::to_string(_kernel_w), 1),
+: Pool2D(
+    model,
+    _kernel_h, _kernel_w,
+    _stride_h, _stride_w,
+    _padding_h, _padding_w,
+    _type, _activation,
+    "Pool2D_"+std::to_string(_kernel_h)+std::to_string(_kernel_w)
+) { }
+
+Pool2D::Pool2D(FFModel& model,
+               int _kernel_h, int _kernel_w,
+               int _stride_h, int _stride_w,
+               int _padding_h, int _padding_w,
+               PoolType _type, ActiMode _activation,
+               std::string const &name)
+: Op(model, OP_POOL2D, name, 1),
   kernel_h(_kernel_h), kernel_w(_kernel_w),
   stride_h(_stride_h), stride_w(_stride_w),
   padding_h(_padding_h), padding_w(_padding_w),
@@ -293,7 +341,7 @@ void Pool2D::forward_task(const Task *task,
     checkCUDA(cudaEventElapsedTime(&elapsed, t_start, t_end));
     cudaEventDestroy(t_start);
     cudaEventDestroy(t_end);
-    printf("Pool2D forward time = %.2fms\n", elapsed);
+    printf("%s [Pool2D] forward time = %.2fms\n", pool->name, elapsed);
   }
 }
 
@@ -527,3 +575,5 @@ bool Pool2D::measure_compute_time(Simulator* sim,
   backward_time = milliseconds / sim->repeat_times;
 
   return false;
+}
+

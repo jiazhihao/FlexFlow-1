@@ -263,24 +263,33 @@ public:
   FFModel(FFConfig &config);
   // C++ APIs for constructing models
   // Add an exp layer
-  Tensor exp(const Tensor& x);
+  Tensor exp(const Tensor& x,
+             const char *name = NULL);
   // Add an add layer
   Tensor add(const Tensor& x,
-             const Tensor& y);
+             const Tensor& y,
+             char const *name = NULL);
   // Add a subtract layer
   Tensor subtract(const Tensor& x,
-                  const Tensor& y);
+                  const Tensor& y,
+                  char const *name = NULL);
   // Add a multiply layer
   Tensor multiply(const Tensor& x,
-                  const Tensor& y);
+                  const Tensor& y,
+                  char const *name = NULL);
   // Add a divide layer
   Tensor divide(const Tensor& x,
-                const Tensor& y);
+                const Tensor& y,
+                char const *name = NULL);
   // Add an activation layer
-  Tensor relu(const Tensor& x);
-  Tensor sigmoid(const Tensor& x);
-  Tensor tanh(const Tensor& x);
-  Tensor elu(const Tensor& x);
+  Tensor relu(const Tensor& x,
+              const char *name = NULL);
+  Tensor sigmoid(const Tensor& x,
+                 const char *name = NULL);
+  Tensor tanh(const Tensor& x,
+              const char *name = NULL);
+  Tensor elu(const Tensor& x,
+             const char *name = NULL);
   // Add a 2D convolutional layer
   Tensor conv2d(const Tensor& input,
                 int outChannels,
@@ -291,7 +300,8 @@ public:
                 bool use_bias = true,
                 const Op* shared_op = NULL,
                 Initializer* krenel_initializer = NULL,
-                Initializer* bias_initializer = NULL);
+                Initializer* bias_initializer = NULL,
+                char const * name = NULL);
   // Add a dropout layer
   Tensor dropout(const Tensor& input,
                  float rate,
@@ -308,7 +318,8 @@ public:
                 int strideH, int strideW,
                 int paddingH, int paddingW,
                 PoolType type = POOL_MAX,
-                ActiMode activation = AC_MODE_NONE);
+                ActiMode activation = AC_MODE_NONE,
+                char const *name = NULL);
   // Add a batch_norm layer
   Tensor batch_norm(const Tensor& input,
                     bool relu = true);
@@ -322,17 +333,21 @@ public:
                bool use_bias = true,
                const Op* shared_op = NULL,
                Initializer* kernel_initializer = NULL,
-               Initializer* bias_initializer = NULL);
+               Initializer* bias_initializer = NULL,
+               const char *name = NULL);
   // Add a concat layer
-  Tensor concat(int n, const Tensor* tensors,
-                int axis);
+  Tensor concat(int n,
+                const Tensor* tensors,
+                int axis,
+                const char *name = NULL);
   // Add a split layer
   void split(const Tensor& input, Tensor* outputs,
              const std::vector<int>& split, int axis);
   // Add a flat layer
   Tensor flat(const Tensor& input);
   // Add a softmax layer
-  Tensor softmax(const Tensor& input);
+  Tensor softmax(const Tensor& input,
+                 const char *name = NULL);
   // Create input tensors and constants
   Tensor transpose(const Tensor& input,
                    const std::vector<int>& perm);
@@ -352,15 +367,15 @@ public:
   // ========================================
   // Functional APIs for constructing models
   // ========================================
-  ElementUnary* exp();
-  ElementBinary* add();
-  ElementBinary* subtract();
-  ElementBinary* multiply();
-  ElementBinary* divide();
-  ElementUnary* relu();
-  ElementUnary* sigmoid();
-  ElementUnary* tanh();
-  ElementUnary* elu();
+  ElementUnary* exp(char const *name = NULL);
+  ElementBinary* add(char const *name = NULL);
+  ElementBinary* subtract(char const *name = NULL);
+  ElementBinary* multiply(char const *name = NULL);
+  ElementBinary* divide(char const *name = NULL);
+  ElementUnary* relu(char const *name = NULL);
+  ElementUnary* sigmoid(char const *name = NULL);
+  ElementUnary* tanh(char const *name = NULL);
+  ElementUnary* elu(char const *name = NULL);
   Conv2D* conv2d(int inChannels,
                  int outChannels,
                  int kernelH, int kernelW,
@@ -369,7 +384,8 @@ public:
                  ActiMode activation = AC_MODE_NONE,
                  bool use_bias = true,
                  Initializer* krenel_initializer = NULL,
-                 Initializer* bias_initializer = NULL);
+                 Initializer* bias_initializer = NULL,
+                 char const *name = NULL);
   Embedding* embedding(int num_entires, int outDim,
                        AggrMode aggr,
                        Initializer* kernel_initializer);
@@ -377,12 +393,14 @@ public:
                  int strideH, int strideW,
                  int paddingH, int paddingW,
                  PoolType type = POOL_MAX,
-                 ActiMode activation = AC_MODE_NONE);
+                 ActiMode activation = AC_MODE_NONE,
+                 char const *name = NULL);
   Linear* dense(int inDim, int outDim,
                 ActiMode activation = AC_MODE_NONE,
                 bool use_bias = true,
                 Initializer* kernel_initializer = NULL,
-                Initializer* bias_initializer = NULL);
+                Initializer* bias_initializer = NULL,
+                const char *name = NULL);
   Flat* flat();
   // ========================================
   // Internal APIs that should not be invoked from applications
@@ -463,6 +481,18 @@ public:
   //DataLoader *dataLoader;
 private:
   std::map<ParallelConfig, IndexSpace, ParaConfigCompare> taskIs;
+
+  Tensor binary(OperatorType op,
+                Tensor const &x,
+                Tensor const &y,
+                char const *name = NULL);
+  ElementBinary * binary(OperatorType op,
+                         char const *name = NULL);
+  Tensor unary(OperatorType op,
+               Tensor const &x,
+               char const *name = NULL);
+  ElementUnary * unary(OperatorType op,
+                       char const *name = NULL);
 };
 
 class ElementBinaryMeta : public OpMeta {
@@ -480,7 +510,16 @@ public:
                 const Tensor& x,
                 const Tensor& y);
   ElementBinary(FFModel& model,
+                OperatorType type,
+                const Tensor& x,
+                const Tensor& y,
+                std::string const &name);
+  ElementBinary(FFModel& model,
                 OperatorType type);
+  ElementBinary(FFModel& model,
+                OperatorType type,
+                std::string const &name);
+
   Tensor init_inout(FFModel& model, const Tensor& input);
   //void add_to_model(FFModel& model);
   void init(const FFModel&);
@@ -521,6 +560,7 @@ private:
 public:
   //IndexSpace task_is;
   OperatorType op_type;
+  bool profiling;
 };
 
 class ElementUnaryMeta : public OpMeta {
@@ -536,7 +576,14 @@ public:
                OperatorType type,
                const Tensor& x);
   ElementUnary(FFModel& model,
+               OperatorType type,
+               const Tensor& x,
+               std::string const &name);
+  ElementUnary(FFModel& model,
                OperatorType type);
+  ElementUnary(FFModel& model,
+               OperatorType type,
+               std::string const &name);
   Tensor init_inout(FFModel& model, const Tensor& input);
   //void add_to_model(FFModel& model);
   void init(const FFModel&);
@@ -590,7 +637,29 @@ public:
          bool use_bias,
          const Op* shared_op,
          Initializer* kernel_initializer,
+         Initializer* bias_initializer,
+         std::string const &name);
+  Conv2D(FFModel& model,
+         const Tensor& input,
+         int out_dim,
+         int kernelH, int kernelW,
+         int strideH, int strideW,
+         int paddingH, int paddingW,
+         ActiMode activation,
+         bool use_bias,
+         const Op* shared_op,
+         Initializer* kernel_initializer,
          Initializer* bias_initializer);
+  Conv2D(FFModel& model,
+         int in_dim, int out_dim,
+         int kernelH, int kernelW,
+         int strideH, int strideW,
+         int paddingH, int paddingW,
+         ActiMode activation,
+         bool use_bias,
+         Initializer* kernel_initializer,
+         Initializer* bias_initializer,
+         std::string const &name);
   Conv2D(FFModel& model,
          int in_dim, int out_dim,
          int kernelH, int kernelW,
@@ -640,7 +709,7 @@ public:
                             float& backward_time);
 public:
   //IndexSpaceT<4> task_is;
-  int in_channels, out_channels, kernel_h, kernel_w, stride_h, stride_w, padding_h, padding_w;
+  int in_channels, out_channels, groups, kernel_h, kernel_w, stride_h, stride_w, padding_h, padding_w;
   bool profiling, use_bias;
   ActiMode activation;
   Initializer *kernel_initializer;
@@ -704,10 +773,23 @@ public:
          int paddingH, int paddingW,
          PoolType type, ActiMode _activation);
   Pool2D(FFModel& model,
+         const Tensor& input,
+         int kernelH, int kernelW,
+         int strideH, int strideW,
+         int paddingH, int paddingW,
+         PoolType type, ActiMode _activation,
+         std::string const &name);
+  Pool2D(FFModel& model,
          int kernelH, int kernelW,
          int strideH, int strideW,
          int paddingH, int paddingW,
          PoolType type, ActiMode _activation);
+  Pool2D(FFModel& model,
+         int kernelH, int kernelW,
+         int strideH, int strideW,
+         int paddingH, int paddingW,
+         PoolType type, ActiMode _activation,
+         std::string const &name);
   Tensor init_inout(FFModel& model, const Tensor& input);
   //void add_to_model(FFModel& model);
   void init(const FFModel&);
@@ -816,12 +898,29 @@ public:
          Initializer* kernel_initializer,
          Initializer* bias_initializer);
   Linear(FFModel& model,
+         const Tensor& input,
+         int outChannels,
+         ActiMode activation,
+         bool use_bias,
+         const Op* shared_op,
+         Initializer* kernel_initializer,
+         Initializer* bias_initializer,
+         const std::string &name);
+  Linear(FFModel& model,
          int inChannels,
          int outChannels,
          ActiMode activation,
          bool use_bias,
          Initializer* kernel_initializer,
          Initializer* bias_initializer);
+  Linear(FFModel& model,
+         int inChannels,
+         int outChannels,
+         ActiMode activation,
+         bool use_bias,
+         Initializer* kernel_initializer,
+         Initializer* bias_initializer,
+         const std::string &name);
   Tensor init_inout(FFModel& model, const Tensor& input);
   //void add_to_model(FFModel& model);
   void init(const FFModel&);
@@ -1053,6 +1152,9 @@ class Softmax : public Op {
 public:
   Softmax(FFModel& model,
           const Tensor& logit);
+  Softmax(FFModel& model,
+          const Tensor& logit,
+          const std::string &name);
   Tensor init_inout(FFModel& model, const Tensor& input) {assert(0); return Tensor();}
   //void add_to_model(FFModel& model) {assert(0);}
   void init(const FFModel&);
@@ -1195,7 +1297,14 @@ public:
 class Concat : public Op {
 public:
   Concat(FFModel& model,
-         int n, const Tensor* inputs, int axis);
+         int n,
+         const Tensor* inputs,
+         int axis);
+  Concat(FFModel& model,
+         int n,
+         const Tensor* inputs,
+         int axis,
+         const std::string &name);
   Tensor init_inout(FFModel& model, const Tensor& input) {assert(0); return Tensor();}
   //void add_to_model(FFModel& model) {assert(0);}
   void init(const FFModel&);

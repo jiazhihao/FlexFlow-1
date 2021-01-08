@@ -35,16 +35,16 @@ class ONNXModel(object):
     def handleAdd(self, ffmodel, node):
         input0 = self.symbol_table[node.input[0]]
         input1 = self.symbol_table[node.input[1]]
-        output = ffmodel.add(input0, input1)
+        output = ffmodel.add(input0, input1, name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.add({}, {})".format(node.input[0], node.input[1]))
+        logging.debug("ffmodel.add({}, {}, name={})".format(node.input[0], node.input[1], node.name))
 
     def handleConcat(self, ffmodel, node):
         inputs = [self.symbol_table[i] for i in node.input]
         attribute = {x.name: x for x in node.attribute}
-        output = ffmodel.concat(tensors=inputs, axis=attribute['axis'].i)
+        output = ffmodel.concat(tensors=inputs, axis=attribute['axis'].i, name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.concat([{}], {})".format(', '.join(node.input), attribute['axis'].i))
+        logging.debug("ffmodel.concat([{}], {}, name={})".format(', '.join(node.input), attribute['axis'].i, node.name))
 
     def handleSplit(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
@@ -65,9 +65,9 @@ class ONNXModel(object):
         kernel = attribute["kernel_shape"].ints
         padding = attribute["pads"].ints
         stride = attribute["strides"].ints
-        output = ffmodel.pool2d(input, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], PoolType.POOL_AVG)
+        output = ffmodel.pool2d(input, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], PoolType.POOL_AVG, name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.pool2d({}, {}, {}, {}, {}, {}, {}, PoolType.POOL_AVG)".format(node.input[0], kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1]))
+        logging.debug("ffmodel.pool2d({}, {}, {}, {}, {}, {}, {}, PoolType.POOL_AVG, name={})".format(node.input[0], kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], node.name))
 
     def handleBatchNormalization(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
@@ -82,9 +82,9 @@ class ONNXModel(object):
         padding = attribute["pads"].ints
         stride = attribute["strides"].ints
         out_channels = self.inputs[node.input[1]].type.tensor_type.shape.dim[0].dim_value
-        output = ffmodel.conv2d(input, out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1])
+        output = ffmodel.conv2d(input, out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.conv2d({}, {}, {}, {}, {}, {}, {}, {})".format(node.input[0], out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1]))
+        logging.debug("ffmodel.conv2d({}, {}, {}, {}, {}, {}, {}, {}, name={})".format(node.input[0], out_channels, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], node.name))
 
     def handleDropout(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
@@ -97,16 +97,16 @@ class ONNXModel(object):
 
     def handleFlatten(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
-        output = ffmodel.flat(input)
+        output = ffmodel.flat(input, name=node.name)
         self.symbol_table[node.output[0]] = output
         logging.debug("ffmodel.flat({})".format(node.input[0]))
 
     def handleGemm(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
         dim = self.inputs[node.input[1]].type.tensor_type.shape.dim[0].dim_value
-        output = ffmodel.dense(input, dim)
+        output = ffmodel.dense(input, dim, name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.dense({}, {})".format(node.input[0], dim))
+        logging.debug("ffmodel.dense({}, {}, name={})".format(node.input[0], dim, node.name))
 
     def handleMaxPool(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
@@ -114,13 +114,13 @@ class ONNXModel(object):
         kernel = attribute["kernel_shape"].ints
         padding = attribute["pads"].ints
         stride = attribute["strides"].ints
-        output = ffmodel.pool2d(input, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1])
+        output = ffmodel.pool2d(input, kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.pool2d({}, {}, {}, {}, {}, {}, {}, PoolType.POOL_MAX)".format(node.input[0], kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1]))
+        logging.debug("ffmodel.pool2d({}, {}, {}, {}, {}, {}, {}, PoolType.POOL_MAX, name={})".format(node.input[0], kernel[0], kernel[1], stride[0], stride[1], padding[0], padding[1], node.name))
 
     def handleRelu(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
-        output = ffmodel.relu(input)
+        output = ffmodel.relu(input, name=node.name)
         self.symbol_table[node.output[0]] = output
         logging.debug("ffmodel.relu({})".format(node.input[0]))
 
@@ -132,12 +132,21 @@ class ONNXModel(object):
 
     def handleSoftmax(self, ffmodel, node):
         input = self.symbol_table[node.input[0]]
-        output = ffmodel.softmax(input)
+        output = ffmodel.softmax(input, name=node.name)
         self.symbol_table[node.output[0]] = output
-        logging.debug("ffmodel.softmax({})".format(node.input[0]))
+        logging.debug("ffmodel.softmax({}, name={})".format(node.input[0], node.name))
+
+    def handleReshape(self, ffmodel, node):
+        input = self.symbol_table[node.input[0]]
+        shape = self.symbol_table[node.input[1]]
+        output = ffmodel.reshape(input, list(shape.int64_data), name=node.name)
+        self.symbol_table[node.output[0]] = output
+        logging.debug("ffmodel.reshape({}, {}, name={})".format(node.input[0], list(shape.int64_data), node.name))
 
     def apply(self, ffmodel, input_dict):
         self.symbol_table = input_dict.copy()
+        for initializer in self.model.graph.initializer:
+            self.symbol_table[initializer.name] = initializer
         for node in self.model.graph.node:
             handler_name = 'handle' + node.op_type
             if hasattr(self, handler_name):

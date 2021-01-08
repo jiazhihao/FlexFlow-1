@@ -22,7 +22,8 @@ Tensor FFModel::dense(const Tensor& input,
                       bool use_bias,
                       const Op* shared_op,
                       Initializer* kernel_initializer,
-                      Initializer* bias_initializer)
+                      Initializer* bias_initializer,
+                      const char *name)
 {
   if (kernel_initializer == NULL) {
     int seed = std::rand();
@@ -31,8 +32,14 @@ Tensor FFModel::dense(const Tensor& input,
   if (bias_initializer == NULL) {
     bias_initializer = new ZeroInitializer();
   }
-  Linear *li = new Linear(*this, input, outDim, activation, use_bias,
-                          shared_op, kernel_initializer, bias_initializer);
+  Linear *li;
+  if (name == NULL) {
+    li = new Linear(*this, input, outDim, activation, use_bias,
+                    shared_op, kernel_initializer, bias_initializer);
+  } else {
+    li = new Linear(*this, input, outDim, activation, use_bias,
+                    shared_op, kernel_initializer, bias_initializer, std::string(name));
+  }
   layers.push_back(li);
   return li->outputs[0];
 }
@@ -41,7 +48,8 @@ Linear* FFModel::dense(int inDim, int outDim,
                        ActiMode activation,
                        bool use_bias,
                        Initializer* kernel_initializer,
-                       Initializer* bias_initializer)
+                       Initializer* bias_initializer,
+                       const char *name)
 {
   if (kernel_initializer == NULL) {
     int seed = std::rand();
@@ -50,8 +58,14 @@ Linear* FFModel::dense(int inDim, int outDim,
   if (bias_initializer == NULL) {
     bias_initializer = new ZeroInitializer();
   }
-  Linear *li = new Linear(*this, inDim, outDim, activation, use_bias,
-                          kernel_initializer, bias_initializer);
+  Linear *li;
+  if (name == NULL) {
+    li = new Linear(*this, inDim, outDim, activation, use_bias,
+                    kernel_initializer, bias_initializer);
+  } else {
+    li = new Linear(*this, inDim, outDim, activation, use_bias,
+                    kernel_initializer, bias_initializer, std::string(name));
+  }
   layers.push_back(li);
   return li;
 }
@@ -64,7 +78,28 @@ Linear::Linear(FFModel& model,
                const Op* shared_op,
                Initializer* _kernel_initializer,
                Initializer* _bias_initializer)
-: Op(model, OP_LINEAR, shared_op, "Dense_"+std::to_string(out_dim), _input),
+: Linear(
+    model,
+    _input,
+    out_dim,
+    _activation,
+    _use_bias,
+    shared_op,
+    _kernel_initializer,
+    _bias_initializer,
+    "Dense_"+std::to_string(out_dim)
+) { }
+
+Linear::Linear(FFModel& model,
+               const Tensor& _input,
+               int out_dim,
+               ActiMode _activation,
+               bool _use_bias,
+               const Op* shared_op,
+               Initializer* _kernel_initializer,
+               Initializer* _bias_initializer,
+               const std::string &name)
+: Op(model, OP_LINEAR, shared_op, name, _input),
   in_channels(_input.adim[0]), out_channels(out_dim),
   activation(_activation), use_bias(_use_bias),
   kernel_initializer(_kernel_initializer),
@@ -94,7 +129,24 @@ Linear::Linear(FFModel& model,
                bool _use_bias,
                Initializer* _kernel_initializer,
                Initializer* _bias_initializer)
-: Op(model, OP_LINEAR, "Dense_"+std::to_string(out_dim), 1),
+: Linear(
+    model,
+    in_dim, out_dim,
+    _activation,
+    _use_bias,
+    _kernel_initializer,
+    _bias_initializer,
+    "Dense_"+std::to_string(out_dim)
+) { }
+
+Linear::Linear(FFModel& model,
+               int in_dim, int out_dim,
+               ActiMode _activation,
+               bool _use_bias,
+               Initializer* _kernel_initializer,
+               Initializer* _bias_initializer,
+               const std::string &name)
+: Op(model, OP_LINEAR, name, 1),
   in_channels(in_dim), out_channels(out_dim),
   activation(_activation), use_bias(_use_bias),
   kernel_initializer(_kernel_initializer),
@@ -523,7 +575,7 @@ void Linear::forward_task_with_dim(const Task *task,
     checkCUDA(cudaEventElapsedTime(&elapsed, t_start, t_end));
     cudaEventDestroy(t_start);
     cudaEventDestroy(t_end);
-    printf("Linear forward time = %.2lfms\n", elapsed);
+    printf("%s [Linear] forward time = %.2lfms\n", linear->name, elapsed);
     //print_tensor<NDIM, float>(acc_input.ptr, acc_input.rect, "[Linear:forward:input]");
     //print_tensor<2, float>(acc_kernel.ptr, acc_kernel.rect, "[Linear:forward:kernel]");
     //print_tensor<1, float>(acc_bias.ptr, acc_bias.rect, "[Linear:forward:bias]");

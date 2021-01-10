@@ -197,6 +197,15 @@ void Reshape::init(const FFModel& ff)
   runtime->execute_index_space(ctx, launcher);
 }
 
+/*static*/
+void Reshape::forward_kernel(const float* input_ptr,
+                             float* output_ptr,
+                             size_t num_elements)
+{
+  checkCUDA(cudaMemcpyAsync(output_ptr, input_ptr,
+      num_elements * sizeof(float), cudaMemcpyDeviceToDevice));
+}
+
 void Reshape::forward_task(const Task *task,
                            const std::vector<PhysicalRegion> &regions,
                            Context ctx, Runtime *runtime)
@@ -209,13 +218,11 @@ void Reshape::forward_task(const Task *task,
   Domain out_domain = runtime->get_index_space_domain(
     ctx, task->regions[1].region.get_index_space());
   assert(in_domain.get_volume() == out_domain.get_volume());
-
   const float* in_ptr = helperGetTensorPointerRO<float>(
     regions[0], task->regions[0], FID_DATA, ctx, runtime);
   float* out_ptr = helperGetTensorPointerWO<float>(
     regions[1], task->regions[1], FID_DATA, ctx, runtime);
-  checkCUDA(cudaMemcpyAsync(out_ptr, in_ptr,
-      in_domain.get_volume() * sizeof(float), cudaMemcpyDeviceToDevice));
+  forward_kernel(in_ptr, out_ptr, in_domain.get_volume());
 }
 
 void Reshape::forward(const FFModel& ff)
@@ -238,11 +245,20 @@ void Reshape::forward(const FFModel& ff)
   runtime->execute_index_space(ctx, launcher);
 }
 
+void Reshape::backward_kernel(float* input_grad_ptr,
+                              const float* output_grad_ptr,
+                              size_t num_elements)
+{
+  float alpha = 1.0f;
+  apply_add_with_scale<<<GET_BLOCKS(num_elements), CUDA_NUM_THREADS>>>(
+      input_grad_ptr, output_grad_ptr, num_elements, alpha);
+
+}
+
 void Reshape::backward_task(const Task *task,
                             const std::vector<PhysicalRegion> &regions,
                             Context ctx, Runtime *runtime)
 {
-  float alpha = 1.0f;
   assert(regions.size() == 2);
   assert(task->regions.size() == 2);
   //const Reshape* reshape = (const Reshape*) task->args;
@@ -256,8 +272,7 @@ void Reshape::backward_task(const Task *task,
     regions[0], task->regions[0], FID_DATA, ctx, runtime);
   float* in_grad_ptr = helperGetTensorPointerRW<float>(
     regions[1], task->regions[1], FID_DATA, ctx, runtime);
-  apply_add_with_scale<<<GET_BLOCKS(in_grad_domain.get_volume()), CUDA_NUM_THREADS>>>(
-      in_grad_ptr, out_grad_ptr, in_grad_domain.get_volume(), alpha);
+  backward_kernel(in_grad_ptr, out_grad_ptr, in_grad_domain.get_volume());
 }
 
 void Reshape::backward(const FFModel& ff)

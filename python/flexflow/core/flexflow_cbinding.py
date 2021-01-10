@@ -351,7 +351,7 @@ def convert_op_handle_to_op(op_type, handle, idx=None, name=None):
   elif op_type == OpType.MULTIHEAD_ATTENTION:
     return Reverse(handle, idx, name)
   else:
-    assert 0, "unknow layer type"
+    assert 0, "unknow layer type {}".format(op_type)
     return None
 
 # -----------------------------------------------------------------------
@@ -1385,6 +1385,7 @@ class FFModel(object):
 
     num_samples = y.get_num_samples()
     batch_size = self._ffconfig.get_batch_size()
+    self._tracing_id += 1 # get a new tracing id
     for epoch in range(0,epochs):
       for d in dataloaders:
         d.reset()
@@ -1393,15 +1394,13 @@ class FFModel(object):
       for iter in range(0, int(iterations)):
         for d in dataloaders:
           d.next_batch(self)
-        if (epoch > 0):
-          self._ffconfig.begin_trace(self._tracing_id)
+        self._ffconfig.begin_trace(self._tracing_id)
         self.forward()
         self.zero_gradients()
         self.backward()
         self.update()
-        if (epoch > 0):
-          self._ffconfig.end_trace(self._tracing_id)
-
+        self._ffconfig.end_trace(self._tracing_id)
+          
   def eval(self, x=None, y=None, batch_size=None):
     """Returns the loss value & metrics values for the model in test mode. 
              
